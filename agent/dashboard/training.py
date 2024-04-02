@@ -21,6 +21,7 @@ local_state = solara.reactive(
         'loss_plot_data': solara.reactive({'epoch': [], 'trn_loss': [], 'val_loss': []}),
         'render_count': solara.reactive(0),
         'model': solara.reactive(None),
+        'seed': solara.reactive(42),
     }
     )
 
@@ -79,13 +80,14 @@ def ExecutePanel(df):
         optimizer_name = local_state.value['optimizer_name'].value
         max_epoch = local_state.value['max_epoch'].value
         loss_name = local_state.value['loss_name'].value
+        seed = local_state.value['seed'].value
 
         epoch_list = []
         trn_loss_list = []
         val_loss_list = []
         for epoch, trn_loss, val_loss, model in train(dff, "Perceptron", input_cols, output_cols, trn_ratio,
               batch_size_trn, batch_size_val, optimizer_name, learning_rate,
-              max_epoch, loss_name):
+              max_epoch, loss_name, seed):
             epoch_list.append(epoch)
             trn_loss_list.append(trn_loss)
             val_loss_list.append(val_loss)
@@ -94,7 +96,7 @@ def ExecutePanel(df):
                  'trn_loss': trn_loss_list,
                  'val_loss': val_loss_list})
             force_render()
-        local_state.value['model'].set(model)
+            local_state.value['model'].set(model)
     solara.Button(label='Train', on_click=trigger_training)
     LossPlot(local_state.value['loss_plot_data'].value, local_state.value['render_count'].value)
 
@@ -148,6 +150,8 @@ def ParameterSelection(df):
                                 value=local_state.value['learning_rate_log10'].value, 
                                 min=-4, max=1, step=0.01,
                                 on_value=local_state.value['learning_rate_log10'].set)
+                solara.InputInt(label='random seed', value=local_state.value['seed'].value,
+                                on_value=local_state.value['seed'].set)
     
 
         

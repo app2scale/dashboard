@@ -2,6 +2,7 @@ import torch
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from functools import partial
+import pandas as pd
 
 from .data import ExplorationDataset
 from .models import Perceptron
@@ -11,7 +12,8 @@ from .loss import loss_mape
 
 def train(df, model_name, input_cols, output_cols, trn_ratio, 
           batch_size_trn, batch_size_val, optimizer_name, learning_rate,
-          max_epoch, loss_name):
+          max_epoch, loss_name, seed):
+    torch.manual_seed(seed)
     if model_name == "Perceptron":
         model = Perceptron(in_features=len(input_cols), out_features=len(output_cols))
     if loss_name == "mape":
@@ -20,7 +22,8 @@ def train(df, model_name, input_cols, output_cols, trn_ratio,
 
     trn_size = int(len(ds)*trn_ratio)
     val_size = len(ds) - trn_size
-    ds_trn, ds_val = torch.utils.data.random_split(ds, [trn_size, val_size])
+    generator = torch.Generator().manual_seed(seed)
+    ds_trn, ds_val = torch.utils.data.random_split(ds, [trn_size, val_size], generator=generator)
     dl_trn = DataLoader(ds_trn, batch_size=batch_size_trn, shuffle=True)
     dl_val = DataLoader(ds_val, batch_size=batch_size_val, shuffle=True)
 
@@ -40,6 +43,7 @@ def train(df, model_name, input_cols, output_cols, trn_ratio,
     print(f'Learning rate: {learning_rate}')
     print(f'Optimizer {optimizer_name}')
     print(f'Max epoch: {max_epoch}')
+    print(f'random seed',seed)
 
     x, y = ds[0]
     in_features = x.shape[0]
@@ -61,11 +65,36 @@ def train(df, model_name, input_cols, output_cols, trn_ratio,
         trn_loss = evaluate(model, dl_trn, loss_fn)
         val_loss = evaluate(model, dl_val, loss_fn)
         #epochbar.set_postfix(epoch=ep+1,loss=loss.item(),val_loss=val_loss)
-        yield ep, trn_loss, val_loss, None
+        yield ep, trn_loss, val_loss, model
         
     return ep, trn_loss, val_loss, model
 
-def predict(model, dataloader):
+def predict(model, df, input_cols, output_cols, trn_ratio, 
+            batch_size_trn, batch_size_val, seed):
+    torch.manual_seed(seed)
+    ds = ExplorationDataset(df, input_cols=input_cols, output_cols=output_cols)
+    trn_size = int(len(ds)*trn_ratio)
+    val_size = len(ds) - trn_size
+    generator = torch.Generator().manual_seed(seed)
+    ds_trn, ds_val = torch.utils.data.random_split(ds, [trn_size, val_size], generator=generator)
+    dl_trn = DataLoader(ds_trn, batch_size=batch_size_trn, shuffle=True)
+    dl_val = DataLoader(ds_val, batch_size=batch_size_val, shuffle=True)
+
+    trn_pred, trn_target = predict_dataloader(model, dl_trn)
+    val_pred, val_target = predict_dataloader(model, dl_val)
+
+    results = {}
+    for col, col_name in enumerate(output_cols):
+        trn_df = pd.DataFrame(torch.cat([trn_pred[:,[col]], trn_target[:,[col]]],dim=1))
+        trn_df = trn_df.rename(columns={0:'prediction',1:'target'})
+        val_df = pd.DataFrame(torch.cat([val_pred[:,[col]], val_target[:,[col]]],dim=1))
+        val_df = val_df.rename(columns={0:'prediction',1:'target'})
+        results[col_name] = {'training': trn_df, 'validation': val_df}
+    return results
+
+
+    
+def predict_dataloader(model, dataloader):
     with torch.no_grad():
         predictions = torch.empty(0, model.out_features)
         targets = torch.empty(predictions.shape)
