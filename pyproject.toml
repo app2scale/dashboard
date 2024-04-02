@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling >=0.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent"
+license = {file = "LICENSE"}
+classifiers = ["License :: OSI Approved :: MIT License"]
+dynamic = ["version", "description"]
+dependencies = [
+    "solara",
+    "pandas",
+    "torch",
+    "plotly",
+    "tqdm",
+]
+
+[tool.hatch.version]
+path = "agent/__init__.py"
+
+
+
+[project.urls]
+Home = "https://www.github.com/app2scale/dashboard"
+
+[tool.black]
+line-length = 160
+
+[tool.isort]
+profile = "black"
