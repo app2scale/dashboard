@@ -2,8 +2,17 @@ import solara
 import pandas as pd
 from typing import Optional, cast
 import solara.express as solara_px
+import numpy as np
 
-df = pd.read_csv('agent/data/averaged_full_state_data.csv')
+def read_data():
+    df = pd.read_csv('agent/data/averaged_full_state_data.csv')
+    df = df.infer_objects()
+    for col in df.columns:
+        if df.dtypes[col] == np.float64:
+            df[col] = df[col].apply(lambda x: round(x, 6))
+    return df
+
+df = read_data()
 
 state = solara.reactive(
     {
