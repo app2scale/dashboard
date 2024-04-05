@@ -19,14 +19,18 @@ def force_render():
 
 @solara.component
 def ScatterPlot(predictions, render_count):
-    for col in predictions.keys():
-        with solara.Row():
-            solara_px.scatter(
-                predictions[col]['training'],
-                x = 'prediction',
-                y = 'target',
-                title=f'{col}'
-            )
+    with solara.Card(title='Visual checks of the model performance',
+                        subtitle='''Scatter plots of predicted and target outputs. More the dots
+                        populate around the main diagonal (y=x), better the model performance.'''):
+        for col in predictions.keys():
+                with solara.Row():
+                    for dataset in predictions[col].keys():
+                        solara_px.scatter(
+                            predictions[col][dataset],
+                            x = 'prediction',
+                            y = 'target',
+                            title=f'{col} - {dataset}'
+                    )
             
 
 @solara.component
