@@ -3,6 +3,7 @@ import pandas as pd
 from typing import Optional, cast
 import solara.express as solara_px
 from .data import state
+from ..backend.data import ExplorationDataset
 from ..backend.utils import train
 from ..backend.loss import loss_mape
 
@@ -21,6 +22,7 @@ local_state = solara.reactive(
         'loss_plot_data': solara.reactive({'epoch': [], 'trn_loss': [], 'val_loss': []}),
         'render_count': solara.reactive(0),
         'model': solara.reactive(None),
+        'ds': solara.reactive(None),
         'seed': solara.reactive(42),
     }
     )
@@ -85,7 +87,9 @@ def ExecutePanel(df):
         epoch_list = []
         trn_loss_list = []
         val_loss_list = []
-        for epoch, trn_loss, val_loss, model in train(dff, "Perceptron", input_cols, output_cols, trn_ratio,
+        ds = ExplorationDataset(dff, input_cols, output_cols)
+        local_state.value['ds'].set(ds)
+        for epoch, trn_loss, val_loss, model in train(ds, "Perceptron", trn_ratio,
               batch_size_trn, batch_size_val, optimizer_name, learning_rate,
               max_epoch, loss_name, seed):
             epoch_list.append(epoch)
