@@ -3,22 +3,51 @@ from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from functools import partial
 import pandas as pd
+from typing import Dict, Union, List
+import itertools
+import solara
 
 from .data import ExplorationDataset
 from .models import Perceptron
 from .loss import loss_mape
 
+def predict_dict(model, ds, inputs: Dict[str, Union[List[int], List[float]]]):
+    combinations = itertools.product(*inputs.values())
+    input_cols = list(inputs.keys())
+
+    input_for_df = {col: [] for col in input_cols}
+    for combination in combinations:
+        for input_col, value in zip(input_cols, combination):
+            input_for_df[input_col].append(value)
+
+    input_df = pd.DataFrame(input_for_df)
+    input_df_transformed = ds.input_transform(input_df)
+    #print(input_df)
+    #print(input_df_transformed)
+    ds_new = ExplorationDataset(input_df, input_cols=ds.input_cols, 
+                output_cols=[], transform_dict=ds.transform_dict)
+    dl_new = DataLoader(ds_new, batch_size=len(input_df), shuffle=False)
+    for x, y in dl_new:
+        output = model.forward(x)
+    output_for_df = {col_name: output[:,col_index].detach().numpy() for col_index, col_name in enumerate(ds.output_cols)}
+    output_df = pd.DataFrame(output_for_df)
+    output_df_transformed = ds.output_inv_transform(output_df)
+    #print(output_df)
+    #print(output_df_transformed)
+    return input_df, output_df_transformed
 
 
-def train(df, model_name, input_cols, output_cols, trn_ratio, 
+
+def train(ds: ExplorationDataset, model_name, trn_ratio, 
           batch_size_trn, batch_size_val, optimizer_name, learning_rate,
           max_epoch, loss_name, seed):
     torch.manual_seed(seed)
+    input_cols, output_cols = ds.input_cols, ds.output_cols
+    df = ds.df
     if model_name == "Perceptron":
         model = Perceptron(in_features=len(input_cols), out_features=len(output_cols))
     if loss_name == "mape":
         loss_fn = loss_mape
-    ds = ExplorationDataset(df, input_cols=input_cols, output_cols=output_cols)
 
     trn_size = int(len(ds)*trn_ratio)
     val_size = len(ds) - trn_size
@@ -103,6 +132,7 @@ def predict_dataloader(model, dataloader):
             predictions = torch.cat([predictions, y_pred], dim=0)
             targets = torch.cat([targets, y], dim=0)
         return predictions, targets
+        
 
 def evaluate(model, dataloader, loss_fn):
     with torch.no_grad():
@@ -140,3 +170,47 @@ def update_policy(model, rewards, log_probabilities, gamma, learning_rate, optim
     # policy_gradient.backward()
     policy_gradient.backward(retain_graph=True)
     optimizer.step()
+
+
+@solara.component
+def Plot1D(x: List, y: List, title='title',xlabel='xlabel', ylabel='ylabel', force_render=0):
+    options = {
+        'title': {
+            'text': title,
+            'left': 'center'},
+        'tooltip': {
+            'trigger': 'axis',
+            'axisPointer': {
+                'type': 'cross'
+            }
+        },
+        'xAxis': {
+            'axisTick': {
+                'alignWithLabel': True
+            },
+            'data': x,
+            'name': xlabel,
+            'nameLocation': 'middle',
+            'nameTextStyle': {'verticalAlign': 'top','padding': [10, 0, 0, 0]}
+        },
+        'yAxis': [
+            {
+                'type': 'value',
+                'name': ylabel,
+                'position': 'left',
+                'alignTicks': True,
+                'axisLine': {
+                    'show': True,
+                    'lineStyle': {'color': 'green'}}
+            },
+        ],
+        'series': [
+            {
+            'name': ylabel,
+            'data': y,
+            'type': 'line',
+            'yAxisIndex': 1
+            },
+        ],
+    }
+    solara.FigureEcharts(option=options)

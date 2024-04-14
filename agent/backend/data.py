@@ -6,12 +6,15 @@ import numpy as np
 class ExplorationDataset(Dataset):
     def __init__(self, df: pd.DataFrame, 
                 input_cols,
-                output_cols):
+                output_cols, transform_dict = None):
         super().__init__()
         self.df = df
         self.input_cols = input_cols
         self.output_cols = output_cols
-        self.transform_dict = self.transform_fit(df)
+        if transform_dict is None:
+            self.transform_dict = self.transform_fit(df)
+        else:
+            self.transform_dict = transform_dict
         self.input_transformed = torch.tensor(self.input_transform(df[input_cols]).values).to(torch.float)
         self.output_transformed = torch.tensor(self.output_transform(df[output_cols]).values).to(torch.float)
                 
