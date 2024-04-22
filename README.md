@@ -7,4 +7,10 @@ sdk: docker
 pinned: false
 ---
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+## Installation
+* Make sure you use Python > 3.8
+~~~bash
+git clone https://github.com/app2scale/dashboard
+cd dashboard
+pip install -e .
+solara run agent.dashboard
