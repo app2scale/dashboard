@@ -44,7 +44,7 @@ def force_render():
 @solara.component
 def InferencePlots(render_count):
 
-
+    unavailable_states_in_data, set_unavailable_states_in_data = solara.use_state_or_update(0)
 
     def execute():
         #print(selected_policy_label, selected_reward_label, selected_load_label)
@@ -62,7 +62,7 @@ def InferencePlots(render_count):
 
 
         df = ds.df
-        print(df.columns)
+        #print(df.columns)
         # get all possible values for inputs
         input_ranges = {col: list(pd.unique(df[col])) for col in input_cols}
         
@@ -72,6 +72,7 @@ def InferencePlots(render_count):
         cur_hist = {}
         replica = initial_replica.value
         cpu = initial_cpu.value
+        state_not_found_in_data = 0
         for load, eod in load_profile:
             if step > nsteps.value:
                 break
@@ -83,9 +84,13 @@ def InferencePlots(render_count):
             
             if use_model_to_estimate_metrics.value:
                 cur_metrics = estimate_metrics(model, ds, cur_state)
-                print(cur_metrics)
+                #print(cur_metrics)
             else:
                 cur_metrics = read_metrics(df, cur_state)
+                if cur_metrics is None:
+                    print('there is no data for this state',cur_state)
+                    state_not_found_in_data += 1
+                    cur_metrics = estimate_metrics(model, ds, cur_state)
 
             combined_data = cur_state | cur_metrics 
             for state, value in combined_data.items():
@@ -112,6 +117,7 @@ def InferencePlots(render_count):
                 cpu = next_state['cpu']
             
             step += 1
+            set_unavailable_states_in_data(state_not_found_in_data)
 
 
     with solara.Row():
@@ -130,7 +136,8 @@ def InferencePlots(render_count):
         solara.Warning("There is no trained model ye, please train one!")
     
     solara.Button(label="Execute", on_click=execute, disabled=model is None)
-
+    if unavailable_states_in_data > 0:
+        solara.Warning(f'There are {unavailable_states_in_data} unavailable states in data. Estimatated versions are used!')
 
     #print('Interence plots')
     with solara.ColumnsResponsive():
