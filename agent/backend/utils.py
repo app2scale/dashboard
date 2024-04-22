@@ -46,10 +46,11 @@ def read_metrics(df, cur_state):
     cols = list(df.columns)
 
     dff = df[cols]
-    #for col, value in cur_state.items():
-    #    print(f'{col} = {value}', dff.columns)
-    #    dff = dff.query(f'{col} = {value}')
-    dff = dff.query('replica == 1')
+    for col, value in cur_state.items():
+        #print(f'{col} = {value}', dff.columns)
+        dff = dff.query(f'{col} == {value}')
+    if len(dff) == 0:
+        return None
     output_df = dff.sample(1)
     for feature in ['replica','cpu','expected_tps']:
         if feature in cols:

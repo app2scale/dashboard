@@ -19,7 +19,7 @@ $$ \max_{state} reward(model(state)) $$
         self.label = """PolicyArgMax: pursue max reward """
 
     def choose(self, model, ds, input_ranges, cur_state, cur_metrics, reward_fn):
-        print(input_ranges)
+        #print(input_ranges)
 
         input_df, output_df = predict_dict(model, ds, input_ranges)
 
@@ -28,7 +28,7 @@ $$ \max_{state} reward(model(state)) $$
         io_df['reward'] = io_df.apply(lambda row: reward_fn.calculate(row), axis=1)
         max_reward_index = io_df['reward'].argmax()
         next_state = io_df.loc[max_reward_index].to_dict()
-        print('next state', next_state)
+        #print('next state', next_state)
         return next_state
 
 
