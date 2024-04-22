@@ -1,3 +1,4 @@
+**/.DS_Store
 agent/backend/__pycache__/
 agent/dashboard/__pycache__/
 agent/backend/__pycache__/data.cpython-310.pyc
