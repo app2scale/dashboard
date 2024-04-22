@@ -7,6 +7,7 @@ import numpy as np
 def read_data():
     df = pd.read_csv('agent/data/averaged_full_state_data.csv')
     df = df.infer_objects()
+    df['step'] = df.index
     for col in df.columns:
         if df.dtypes[col] == np.float64:
             df[col] = df[col].apply(lambda x: round(x, 6))
@@ -88,6 +89,7 @@ def DataViewer(df):
             size_max=state.value['size_max'].value,
             log_x=state.value['logx'].value,
             log_y=state.value['logy'].value,
+            width=800,
         )
     else:
         solara.Warning("Select x and y columns")

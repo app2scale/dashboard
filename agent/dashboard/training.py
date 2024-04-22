@@ -9,7 +9,7 @@ from ..backend.loss import loss_mape
 
 local_state = solara.reactive(
     {
-        'input_cols': solara.reactive(['replica']),
+        'input_cols': solara.reactive(['replica','cpu','expected_tps']),
         'output_cols': solara.reactive(['cpu_usage']),
         'trn_ratio' : solara.reactive(0.8),
         'learning_rate_log10': solara.reactive(-3),
@@ -17,7 +17,7 @@ local_state = solara.reactive(
         'batch_size_val': solara.reactive(16),
         'model_name': solara.reactive("Perceptron"),
         'optimizer_name': solara.reactive("Adam"),
-        'max_epoch': solara.reactive(100),
+        'max_epoch': solara.reactive(30),
         'loss_name': solara.reactive('mape'),
         'loss_plot_data': solara.reactive({'epoch': [], 'trn_loss': [], 'val_loss': []}),
         'render_count': solara.reactive(0),

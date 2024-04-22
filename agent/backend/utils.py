@@ -36,7 +36,27 @@ def predict_dict(model, ds, inputs: Dict[str, Union[List[int], List[float]]]):
     #print(output_df_transformed)
     return input_df, output_df_transformed
 
+def estimate_metrics(model, ds, cur_state):
+    input_ranges = {key: [value] for key, value in cur_state.items()}
+    input_df, output_df = predict_dict(model, ds, input_ranges)
+    est_metrics = {metric: output_df.loc[0,metric] for metric in output_df.columns}
+    return est_metrics
+                
+def read_metrics(df, cur_state):
+    cols = list(df.columns)
 
+    dff = df[cols]
+    #for col, value in cur_state.items():
+    #    print(f'{col} = {value}', dff.columns)
+    #    dff = dff.query(f'{col} = {value}')
+    dff = dff.query('replica == 1')
+    output_df = dff.sample(1)
+    for feature in ['replica','cpu','expected_tps']:
+        if feature in cols:
+            cols.remove(feature)
+    output_df = output_df[cols].reset_index(drop=True)
+    metrics = {metric: output_df.loc[0,metric] for metric in output_df.columns}
+    return metrics
 
 def train(ds: ExplorationDataset, model_name, trn_ratio, 
           batch_size_trn, batch_size_val, optimizer_name, learning_rate,

@@ -1,7 +1,7 @@
 import pandas as pd
 from .utils import predict_dict
 
-class Policy1():
+class PolicyArgMax():
     '''Choose input for which max reward is obtained. Pseudocode:
     
 * Determine the input features of the models a.k.a. state variables
@@ -16,21 +16,40 @@ $$ \max_{state} reward(model(state)) $$
     '''
 
     def __init__(self):
-        self.label = """PolicyArgMax: finds the best state giving max reward """
+        self.label = """PolicyArgMax: pursue max reward """
 
-    def choose(self, model, ds, inputs, reward_fn):
-        input_df, output_df = predict_dict(model, ds, inputs)
+    def choose(self, model, ds, input_ranges, cur_state, cur_metrics, reward_fn):
+        print(input_ranges)
 
-        print('Policy choose')
-        print(input_df)
-        print(output_df)
-        
+        input_df, output_df = predict_dict(model, ds, input_ranges)
+
         io_df = pd.concat([input_df, output_df],axis=1)
 
         io_df['reward'] = io_df.apply(lambda row: reward_fn.calculate(row), axis=1)
-        print(io_df)
-        print(io_df.columns)
         max_reward_index = io_df['reward'].argmax()
-        best_state = io_df.loc[max_reward_index].to_dict()
-        print('best state', best_state)
-        return best_state
+        next_state = io_df.loc[max_reward_index].to_dict()
+        print('next state', next_state)
+        return next_state
+
+
+class PolicyHPA():
+    '''Increase/decrease replica if cpu usage is above/below threshold
+    
+**Remarks**
+
+* reward functions are not used.
+    '''
+
+    def __init__(self, threshold = 0.4):
+        self.label = f"""Kubernetes HPA (cpu threshold={threshold})"""
+        self.threshold = threshold
+
+    def choose(self, model, ds, input_ranges, cur_state, cur_metrics, reward_fn):
+        next_state = cur_state.copy()
+
+        if cur_metrics['cpu_usage'] > self.threshold:
+            next_state['replica'] = min(cur_state['replica'] + 1, max(input_ranges['replica']))
+        elif cur_metrics['cpu_usage'] < self.threshold:
+            next_state['replica'] = max(cur_state['replica'] - 1, min(input_ranges['replica']))
+        
+        return next_state

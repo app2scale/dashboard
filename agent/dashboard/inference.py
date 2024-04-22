@@ -1,11 +1,11 @@
 import solara
 import pandas as pd
-from ..backend.reward import Reward1, Reward2
-from ..backend.policy import Policy1
-from ..backend.load import ConstantLoad
+from ..backend.reward import RewardHighCPUUsage, RewardLowCPUUsage
+from ..backend.policy import PolicyArgMax, PolicyHPA
+from ..backend.load import ConstantLoad, SinusLoad
 from .training import local_state as training_state
 from .data import state as data_state
-from ..backend.utils import predict_dict, Plot1D
+from ..backend.utils import estimate_metrics, read_metrics
 
 local_state = solara.reactive(
     {
@@ -15,19 +15,23 @@ local_state = solara.reactive(
     }
     )
 
-reward_objects = [Reward1(), Reward2()]
+reward_objects = [RewardHighCPUUsage(), RewardLowCPUUsage()]
 reward_labels = [r.label for r in reward_objects]
 selected_reward_label = solara.reactive(reward_labels[0])
 
-policy_objects = [Policy1()]
+policy_objects = [PolicyArgMax(), PolicyHPA(0.2), PolicyHPA(0.4), PolicyHPA(0.6), PolicyHPA(0.8)]
 policy_labels = [p.label for p in policy_objects]
 selected_policy_label = solara.reactive(policy_labels[0])
 
-load_objects = [ConstantLoad(24), ConstantLoad(72), ConstantLoad(168)]
+load_objects = [ConstantLoad(24), ConstantLoad(72), ConstantLoad(168), SinusLoad(180, 100)]
 load_labels = [p.label for p in load_objects]
 selected_load_label = solara.reactive(load_labels[0])
 
 nsteps = solara.reactive(10)
+initial_replica = solara.reactive(1)
+initial_cpu = solara.reactive(4)
+
+use_model_to_estimate_metrics = solara.reactive(False)
 
 inference_history = solara.reactive({})
 
@@ -53,28 +57,38 @@ def InferencePlots(render_count):
         chosen_policy_index = policy_labels.index(selected_policy_label.value)
         chosen_policy = policy_objects[chosen_policy_index]
         chosen_reward_index = reward_labels.index(selected_reward_label.value)
-        chosen_reward = reward_objects[chosen_reward_index]
+        chosen_reward_fn = reward_objects[chosen_reward_index]
         ds = training_state.value['ds'].value
 
 
         df = ds.df
+        print(df.columns)
         # get all possible values for inputs
-        input = {col: list(pd.unique(df[col])) for col in input_cols}
+        input_ranges = {col: list(pd.unique(df[col])) for col in input_cols}
         
         # Step through load profile
         load_profile = chosen_load
         step = 0
         cur_hist = {}
+        replica = initial_replica.value
+        cpu = initial_cpu.value
         for load in load_profile:
             if step > nsteps.value:
                 break
             # the model uses load as an input, supply with it
-            if 'expected_tps' in input.keys():
-                input['expected_tps'] = [load]
+            if 'expected_tps' in input_ranges.keys():
+                input_ranges['expected_tps'] = [load]
 
-        
-            best_state = chosen_policy.choose(model, ds, input, chosen_reward)
-            for state, value in best_state.items():
+            cur_state = {"replica": replica, "cpu": cpu, "expected_tps": load}
+            
+            if use_model_to_estimate_metrics.value:
+                cur_metrics = estimate_metrics(model, ds, cur_state)
+                print(cur_metrics)
+            else:
+                cur_metrics = read_metrics(df, cur_state)
+
+            combined_data = cur_state | cur_metrics 
+            for state, value in combined_data.items():
                 if state in cur_hist.keys():
                     cur_hist[state]['y'].append(value)
                     cur_hist[state]['x'].append(step)
@@ -88,16 +102,29 @@ def InferencePlots(render_count):
                     cur_hist[state]['title'] = state
                     cur_hist[state]['xlabel'] = 'step'
                     cur_hist[state]['ylabel'] = state
-            #print(cur_hist)
-
             local_state.value['inference_plot_data'].set(cur_hist)
             force_render()
 
+            next_state = chosen_policy.choose(model, ds, input_ranges, cur_state, cur_metrics, chosen_reward_fn)
+            if 'replica' in next_state.keys():
+                replica = next_state['replica']
+            if 'cpu' in next_state.keys():
+                cpu = next_state['cpu']
+            
             step += 1
-        #print(local_state.value['inference_plot_data'].value)
 
 
-    solara.InputInt(label='Number of steps', value=nsteps.value, on_value=nsteps.set)
+    with solara.Row():
+        solara.InputInt(label='Number of steps', value=nsteps.value, on_value=nsteps.set)
+        solara.InputInt(label="Initial replica", value=initial_replica)
+        solara.InputInt(label="Initial CPU", value=initial_cpu)
+        if set(training_state.value['input_cols'].value) == set(['replica','cpu','expected_tps']):
+            solara.Checkbox(label='Use twin model to estimate metrics', value=use_model_to_estimate_metrics)
+        else:
+            with solara.Column():
+                solara.Checkbox(label='Use twin model to estimate metrics', value=use_model_to_estimate_metrics, disabled=True)
+                solara.Info('twin model is not suitable for metric estimation')
+
     model = training_state.value['model'].value
     if model is None:
         solara.Warning("Model is not ready yet!")
@@ -106,48 +133,50 @@ def InferencePlots(render_count):
 
 
     #print('Interence plots')
-    for col, content in local_state.value['inference_plot_data'].value.items():
-        options = {
-            'title': {
-                'text': content['title'],
-                'left': 'center'},
-            'tooltip': {
-                'trigger': 'axis',
-                'axisPointer': {
-                    'type': 'cross'
-                }
-            },
-            'xAxis': {
-                'axisTick': {
-                    'alignWithLabel': True
+    with solara.ColumnsResponsive():
+        for col, content in local_state.value['inference_plot_data'].value.items():
+            options = {
+                'title': {
+                    'text': content['title'],
+                    'left': 'center'},
+                'tooltip': {
+                    'trigger': 'axis',
+                    'axisPointer': {
+                        'type': 'cross'
+                    }
                 },
-                'data': content['x'],
-                'name': content['xlabel'],
-                'nameLocation': 'middle',
-                'nameTextStyle': {'verticalAlign': 'top','padding': [10, 0, 0, 0]}
-            },
-            'yAxis': [
-                {
-                    'type': 'value',
+                'xAxis': {
+                    'axisTick': {
+                        'alignWithLabel': True
+                    },
+                    'data': content['x'],
+                    'name': content['xlabel'],
+                    'nameLocation': 'middle',
+                    'nameTextStyle': {'verticalAlign': 'top','padding': [10, 0, 0, 0]}
+                },
+                'yAxis': [
+                    {
+                        'type': 'value',
+                        'name': content['ylabel'],
+                        'position': 'left',
+                        'alignTicks': True,
+                        'axisLine': {
+                            'show': True,
+                            'lineStyle': {'color': 'green'}}
+                    },
+                ],
+                'series': [
+                    {
                     'name': content['ylabel'],
-                    'position': 'left',
-                    'alignTicks': True,
-                    'axisLine': {
-                        'show': True,
-                        'lineStyle': {'color': 'green'}}
-                },
-            ],
-            'series': [
-                {
-                'name': content['ylabel'],
-                'data': content['y'],
-                'type': 'line',
-                'yAxisIndex': 0
-                },
-            ],
-        }
-        solara.FigureEcharts(option=options)
-        
+                    'data': content['y'],
+                    'type': 'line',
+                    'yAxisIndex': 0
+                    },
+                ],
+            }
+            solara.FigureEcharts(option=options, attributes={"style": "height: 300px; width: 300px"})
+
+
 
 @solara.component
 def Page():
