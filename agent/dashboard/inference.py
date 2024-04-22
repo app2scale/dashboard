@@ -30,6 +30,7 @@ selected_load_label = solara.reactive(load_labels[0])
 nsteps = solara.reactive(10)
 initial_replica = solara.reactive(1)
 initial_cpu = solara.reactive(4)
+cpu_cost_per_hour = solara.reactive(0.031611)
 
 use_model_to_estimate_metrics = solara.reactive(False)
 
@@ -45,6 +46,7 @@ def force_render():
 def InferencePlots(render_count):
 
     unavailable_states_in_data, set_unavailable_states_in_data = solara.use_state_or_update(0)
+    total_cost, set_total_cost = solara.use_state_or_update(0)
 
     def execute():
         #print(selected_policy_label, selected_reward_label, selected_load_label)
@@ -73,6 +75,7 @@ def InferencePlots(render_count):
         replica = initial_replica.value
         cpu = initial_cpu.value
         state_not_found_in_data = 0
+        cum_cost = 0.0
         for load, eod in load_profile:
             if step > nsteps.value:
                 break
@@ -81,7 +84,8 @@ def InferencePlots(render_count):
                 input_ranges['expected_tps'] = [load]
 
             cur_state = {"replica": replica, "cpu": cpu, "expected_tps": load}
-            
+            cum_cost += cpu_cost_per_hour.value * 24 * replica * cpu / 10
+            set_total_cost(cum_cost)
             if use_model_to_estimate_metrics.value:
                 cur_metrics = estimate_metrics(model, ds, cur_state)
                 #print(cur_metrics)
@@ -120,10 +124,11 @@ def InferencePlots(render_count):
             set_unavailable_states_in_data(state_not_found_in_data)
 
 
-    with solara.Row():
+    with solara.GridFixed(columns=3):
         solara.InputInt(label='Number of steps', value=nsteps.value, on_value=nsteps.set)
         solara.InputInt(label="Initial replica", value=initial_replica)
         solara.InputInt(label="Initial CPU", value=initial_cpu)
+        solara.InputFloat(label="CPU cost per hour ($)", value=cpu_cost_per_hour)
         if set(training_state.value['input_cols'].value) == set(['replica','cpu','expected_tps']):
             solara.Checkbox(label='Use twin model to estimate metrics', value=use_model_to_estimate_metrics)
         else:
@@ -140,6 +145,8 @@ def InferencePlots(render_count):
         solara.Warning(f'There are {unavailable_states_in_data} unavailable states in data. Estimatated versions are used!')
 
     #print('Interence plots')
+    if len(local_state.value['inference_plot_data'].value.items()) > 0:
+        solara.Text(f'Total cost is ${total_cost:.4f}')
     with solara.ColumnsResponsive():
         for col, content in local_state.value['inference_plot_data'].value.items():
             options = {
