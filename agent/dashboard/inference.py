@@ -2,7 +2,7 @@ import solara
 import pandas as pd
 from ..backend.reward import RewardHighCPUUsage, RewardLowCPUUsage
 from ..backend.policy import PolicyArgMax, PolicyHPA
-from ..backend.load import ConstantLoad, SinusLoad
+from ..backend.load import ConstantLoad, SinusLoad, PaymentGateway113Load
 from .training import local_state as training_state
 from .data import state as data_state
 from ..backend.utils import estimate_metrics, read_metrics
@@ -23,7 +23,7 @@ policy_objects = [PolicyArgMax(), PolicyHPA(0.2), PolicyHPA(0.4), PolicyHPA(0.6)
 policy_labels = [p.label for p in policy_objects]
 selected_policy_label = solara.reactive(policy_labels[0])
 
-load_objects = [ConstantLoad(24), ConstantLoad(72), ConstantLoad(168), SinusLoad(180, 100)]
+load_objects = [ConstantLoad(24), ConstantLoad(72), ConstantLoad(168), SinusLoad(180, 100), PaymentGateway113Load()]
 load_labels = [p.label for p in load_objects]
 selected_load_label = solara.reactive(load_labels[0])
 
@@ -72,7 +72,7 @@ def InferencePlots(render_count):
         cur_hist = {}
         replica = initial_replica.value
         cpu = initial_cpu.value
-        for load in load_profile:
+        for load, eod in load_profile:
             if step > nsteps.value:
                 break
             # the model uses load as an input, supply with it
@@ -127,7 +127,7 @@ def InferencePlots(render_count):
 
     model = training_state.value['model'].value
     if model is None:
-        solara.Warning("Model is not ready yet!")
+        solara.Warning("There is no trained model ye, please train one!")
     
     solara.Button(label="Execute", on_click=execute, disabled=model is None)
 
@@ -177,6 +177,40 @@ def InferencePlots(render_count):
             solara.FigureEcharts(option=options, attributes={"style": "height: 300px; width: 300px"})
 
 
+@solara.component
+def Plot1D(x,y):
+    options = {
+        "xAxis": {
+            "type": "category",
+            "data": x,
+        },
+        "yAxis": {
+            "type": "value",
+        },
+        "series": [
+            {
+                "data": y,
+                "type": 'line'
+            },
+        ]
+    }
+
+    with solara.Column():
+        solara.FigureEcharts(option=options)
+
+@solara.component
+def LoadProfilePlot(load_profile):
+    x, y = [], []
+    step = 0
+    for load, eod in load_profile:
+        if step > 150 or eod :
+            break
+        x.append(step)
+        y.append(load)
+        step += 1
+
+    Plot1D(x,y)
+
 
 @solara.component
 def Page():
@@ -206,4 +240,5 @@ def Page():
                     chosen_load_index = load_labels.index(selected_load_label.value)
                     chosen_load = load_objects[chosen_load_index]
                     solara.Markdown(md_text=chosen_load.__doc__)
+                    LoadProfilePlot(chosen_load)
     InferencePlots(local_state.value['render_count'].value)
