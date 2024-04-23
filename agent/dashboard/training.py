@@ -30,6 +30,12 @@ local_state = solara.reactive(
 @solara.component
 def LossPlot(data, render_count):
     options = {
+        'tooltip': {
+            'trigger': 'axis',
+            'axisPointer': {
+                'type': 'cross'
+            }
+        },
         "xAxis": {
             "type": "category",
             "data": data['epoch'],
@@ -39,10 +45,12 @@ def LossPlot(data, render_count):
         },
         "series": [ 
             {
+                "name": "training loss",
                 "data": data['trn_loss'],
                 "type": 'line'
             },
             {
+                "name": "validation loss",
                 "data": data['val_loss'],
                 "type": 'line'
             },            
