@@ -8,7 +8,7 @@ import itertools
 import solara
 
 from .data import ExplorationDataset
-from .models import Perceptron
+from .models import Perceptron, NetSingleHiddenLayer
 from .loss import loss_mape
 
 def predict_dict(model, ds, inputs: Dict[str, Union[List[int], List[float]]]):
@@ -67,6 +67,10 @@ def train(ds: ExplorationDataset, model_name, trn_ratio,
     df = ds.df
     if model_name == "Perceptron":
         model = Perceptron(in_features=len(input_cols), out_features=len(output_cols))
+    elif model_name == "NetSingleHiddenLayer":
+        # TODO: make hidden_size adjustable in ui
+        model = NetSingleHiddenLayer(in_features=len(input_cols), out_features=len(output_cols), hidden_size=10)
+
     if loss_name == "mape":
         loss_fn = loss_mape
 
