@@ -65,10 +65,11 @@ def force_render():
 
 @solara.component
 def FilterPanel(df):
-    solara.CrossFilterReport(df, classes=["py-2"])
-    for col in ['replica','cpu','expected_tps','previous_tps']:
-        if col in df.columns:
-            solara.CrossFilterSelect(df, configurable=False, column=col)
+    with solara.Column(gap="0px"):
+        solara.CrossFilterReport(df, classes=["py-2"])
+        for col in ['replica','cpu','expected_tps','previous_tps']:
+            if col in df.columns:
+                solara.CrossFilterSelect(df, configurable=False, column=col)
 
 @solara.component
 def ExecutePanel(df):

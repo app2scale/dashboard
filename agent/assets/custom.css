@@ -3,3 +3,19 @@ header {
     background-position: center; /* Center the background image */
     background-repeat: no-repeat; /* Prevent image from repeating */
 }
+
+.v-application {
+    line-height: 1;
+  }
+
+.v-input__slot {
+    margin-bottom: 1px;
+}
+
+.v-messages {
+    min-height: 2px;
+}
+
+.v-text-field__details {
+    min-height: 2px;
+  }
