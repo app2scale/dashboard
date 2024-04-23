@@ -83,13 +83,14 @@ def ExecutePanel(df):
         max_epoch = local_state.value['max_epoch'].value
         loss_name = local_state.value['loss_name'].value
         seed = local_state.value['seed'].value
+        model_name = local_state.value['model_name'].value
 
         epoch_list = []
         trn_loss_list = []
         val_loss_list = []
         ds = ExplorationDataset(dff, input_cols, output_cols)
         local_state.value['ds'].set(ds)
-        for epoch, trn_loss, val_loss, model in train(ds, "Perceptron", trn_ratio,
+        for epoch, trn_loss, val_loss, model in train(ds, model_name, trn_ratio,
               batch_size_trn, batch_size_val, optimizer_name, learning_rate,
               max_epoch, loss_name, seed):
             epoch_list.append(epoch)
@@ -125,7 +126,7 @@ def ParameterSelection(df):
                             value=local_state.value['optimizer_name'].value,
                             on_value=local_state.value['optimizer_name'].set)
                 
-                solara.Select(label="Model", values=["Perceptron"], 
+                solara.Select(label="Model", values=["Perceptron","NetSingleHiddenLayer"],
                             value=local_state.value['model_name'].value,
                             on_value=local_state.value['model_name'].set)
                 

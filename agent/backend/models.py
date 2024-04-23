@@ -11,7 +11,22 @@ class Perceptron(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = self.layer(x)
         return out
-    
+
+
+class NetSingleHiddenLayer(nn.Module):
+    def __init__(self, in_features: int, out_features: int, hidden_size):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.hidden_size = hidden_size
+        self.layer1 = nn.Sequential(nn.Linear(in_features=self.in_features,out_features=self.hidden_size))
+        self.layer2 = nn.Sequential(nn.Linear(in_features=self.hidden_size,out_features=self.out_features))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.layer1(x)
+        out = self.layer2(out)
+        return out
+
 
 class PolicyGradientNetwork(nn.Module):
     def __init__(self, num_inputs, num_actions, hidden_size):
