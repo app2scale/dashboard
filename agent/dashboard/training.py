@@ -39,9 +39,11 @@ def LossPlot(data, render_count):
         "xAxis": {
             "type": "category",
             "data": data['epoch'],
+            "name": "epoch",
         },
         "yAxis": {
             "type": "value",
+            "name": "loss",
         },
         "series": [ 
             {
@@ -62,14 +64,6 @@ def LossPlot(data, render_count):
 
 def force_render():
     local_state.value['render_count'].set(1 + local_state.value['render_count'].value)
-
-@solara.component
-def FilterPanel(df):
-    with solara.Column(gap="0px"):
-        solara.CrossFilterReport(df, classes=["py-2"])
-        for col in ['replica','cpu','expected_tps','previous_tps']:
-            if col in df.columns:
-                solara.CrossFilterSelect(df, configurable=False, column=col)
 
 @solara.component
 def ExecutePanel(df):
@@ -112,38 +106,52 @@ def ExecutePanel(df):
             force_render()
             local_state.value['model'].set(model)
     solara.Button(label='Train', on_click=trigger_training)
-    LossPlot(local_state.value['loss_plot_data'].value, local_state.value['render_count'].value)
+    with solara.Card(title="Loss History",  margin=1, elevation=10,
+                    subtitle="""Once you start training, you can monitor the training and validation losses in this plot.
+                    """):
+        LossPlot(local_state.value['loss_plot_data'].value, local_state.value['render_count'].value)
 
 
 @solara.component
-def ParameterSelection(df):
+def ParameterSelection(df, attributes):
     def select_input_cols(selected_cols):
         local_state.value['input_cols'].set(selected_cols)
     def select_output_cols(selected_cols):
         local_state.value['output_cols'].set(selected_cols)
 
-    with solara.Row():
-        with solara.Columns([50,50]):
-            with solara.Column():
-                solara.SelectMultiple(label='Input cols', all_values=list(df.columns), 
+    with solara.lab.Tabs():
+        with solara.lab.Tab("I/O"):
+            with solara.Card(title="Input/Output Selection",  margin=1, elevation=10,
+                subtitle="""Select which attributes of the data are to be used as input/output of the
+                machine learning model. Selected attributes will be reflected to the dataframe on the right,
+                immediately."""):
+                solara.SelectMultiple(label='Input features', all_values=attributes,
                             values=local_state.value['input_cols'].value,
                             on_value=select_input_cols)
-                solara.SelectMultiple(label='Output cols', all_values=list(df.columns), 
+                solara.SelectMultiple(label='Output features', all_values=attributes,
                             values=local_state.value['output_cols'].value,
                             on_value=select_output_cols)
-                solara.Select(label="Optimizer", values=["Adam"], 
-                            value=local_state.value['optimizer_name'].value,
-                            on_value=local_state.value['optimizer_name'].set)
-                
+        with solara.lab.Tab("PARAMETERS"):
+            with solara.Card(title="Model Training Parameters",  margin=1, elevation=10,
+                subtitle="""Select the machine learning model, optimizer, loss and various hyper-parameters
+                used in the training."""):
                 solara.Select(label="Model", values=["Perceptron","NetSingleHiddenLayer"],
                             value=local_state.value['model_name'].value,
                             on_value=local_state.value['model_name'].set)
-                
+                solara.Select(label="Optimizer", values=["Adam"],
+                            value=local_state.value['optimizer_name'].value,
+                            on_value=local_state.value['optimizer_name'].set)
                 solara.Select(label="Loss", values=['mape'], 
                             value=local_state.value['loss_name'].value,
                             on_value=local_state.value['loss_name'].set)
-                
-            with solara.Column():
+                solara.SliderFloat(label="Learning rate (log10)",
+                                value=local_state.value['learning_rate_log10'].value,
+                                min=-4, max=1, step=0.01,
+                                on_value=local_state.value['learning_rate_log10'].set)
+                solara.SliderInt(label='Max epoch',
+                                value=local_state.value['max_epoch'].value, min=1, max=1000,
+                                on_value=local_state.value['max_epoch'].set,
+                                thumb_label=True)
                 solara.SliderFloat(label='Training ratio', 
                                 value=local_state.value['trn_ratio'].value, min=0, max=1,
                                 on_value=local_state.value['trn_ratio'].set,
@@ -156,23 +164,24 @@ def ParameterSelection(df):
                                 value=local_state.value['batch_size_val'].value, min=1, max=256,
                                 on_value=local_state.value['batch_size_val'].set,
                                 thumb_label=True)  
-                solara.SliderInt(label='Max epoch', 
-                                value=local_state.value['max_epoch'].value, min=1, max=1000,
-                                on_value=local_state.value['max_epoch'].set,
-                                thumb_label=True)    
-                solara.SliderFloat(label="Learning rate log10",
-                                value=local_state.value['learning_rate_log10'].value, 
-                                min=-4, max=1, step=0.01,
-                                on_value=local_state.value['learning_rate_log10'].set)
-                solara.InputInt(label='random seed', value=local_state.value['seed'].value,
-                                on_value=local_state.value['seed'].set)
-    
+                solara.SliderInt(label='random seed', value=local_state.value['seed'].value, min=0, max=1000,
+                                on_value=local_state.value['seed'].set,
+                                thumb_label=True)
+        with solara.lab.Tab("FILTER"):
+            with solara.Card(title="Data Filter",  margin=1, elevation=10,
+                    subtitle="""In addition to the input/output attributes, you can also
+                    select a subset of rows for training. Filtered dataframe displayed on the
+                    right  will be used in the training."""):
+                solara.CrossFilterReport(df)
+                for col in ['replica','cpu','expected_tps','previous_tps']:
+                    if col in df.columns:
+                        solara.CrossFilterSelect(df, configurable=False, column=col)
 
-        
 
 @solara.component
 def Page():
     df = state.value['data']
+    attributes = list(df.columns)
     dff = df
     filtered_cols = []
     if len(local_state.value['input_cols'].value) > 0:
@@ -181,10 +190,15 @@ def Page():
         filtered_cols += local_state.value['output_cols'].value
     if len(filtered_cols) > 0:
         dff = df[filtered_cols]
-    with solara.Columns([40,30,30]):
-        ParameterSelection(df)
-        FilterPanel(dff)
-        solara.CrossFilterDataFrame(dff, items_per_page=10)
-    ExecutePanel(dff)
+    with solara.Sidebar():
+        ParameterSelection(dff, attributes)
+    with solara.ColumnsResponsive():
+        ExecutePanel(dff)
+        with solara.Card(title="Training/Testing Data",  margin=1, elevation=10,
+                    subtitle="""Based on the selected nput/output attributes and the cross-filters,
+                    this is the final data used in training/validation. Right before using
+                    this data in the training/validation, normalization is applied. For more
+                    information please check backend.data.ExplorationDataset"""):
+            solara.CrossFilterDataFrame(dff, items_per_page=10)
 
     
