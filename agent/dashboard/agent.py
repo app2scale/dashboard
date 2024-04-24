@@ -3,21 +3,20 @@ import pandas as pd
 import os
 import zipfile
 from ray.tune.registry import register_env
-from env import Teastore
+from ..environments.env import Teastore
 from ray.rllib.algorithms import ppo, sac, dqn
 from solara.components.file_drop import FileInfo
 import time
+from zipfile import ZipFile
 
 test_plot_data = solara.reactive({'step': [], 'replica': [], 'cpu': [], "load": [], 
                                   "num_request": [], "response_time": []})
 uploaded_algo = solara.reactive(None)
 error_state = solara.reactive(None)
-number_of_steps = solara.reactive(10)
+number_of_steps = solara.reactive(100)
 available_checkpoint_names = solara.reactive([])
 selected_checkpoint_name = solara.reactive(None)
 uploaded_algo_status = solara.reactive(False)
-
-
 
 @solara.component
 def status_plot(data):
@@ -139,9 +138,7 @@ def status_plot(data):
         },        
     }
 
-
-
-    with solara.GridFixed(columns=1):
+    with solara.GridFixed(columns=2):
         # with solara.Column():
         solara.FigureEcharts(option=options_replica)
         solara.FigureEcharts(option=options_cpu)
@@ -150,53 +147,10 @@ def status_plot(data):
         solara.FigureEcharts(option=options_load)
         solara.FigureEcharts(option=options_response_time)
 
-
-
-
-@solara.component
-def CheckpointDrop():
-    zip_content, set_zip_content = solara.use_state("")
-    content, set_content = solara.use_state(b"")
-    filename, set_filename = solara.use_state("")
-    size, set_size = solara.use_state(0)
-    extract_path, set_extract_path = solara.use_state("")
-
-
-    def on_file(f: FileInfo):
-        set_filename(f["name"])
-        set_size(f["size"])
-        temp_path = os.path.join(f["name"])
-        with open(temp_path, "wb") as temp_file:
-            temp_file.write(f["file_obj"].read())
-
-        extracted_folder = os.path.join("extracted_files", os.path.splitext(f["name"])[0])
-        with zipfile.ZipFile(temp_path, 'r') as zip_ref:
-            zip_ref.extractall(extracted_folder) 
-
-        set_extract_path(extracted_folder)       
-        extracted_files = os.listdir(extracted_folder)
-        set_zip_content("\n".join(extracted_files))  
-
-        # find the names of the checkpoint folders
-        #existing_names = available_checkpoint_names.value 
-        # updated_names = set(new_names + existing_names)
-        available_checkpoint_names.set(['denee'])
-
-        os.remove(temp_path)
-
-
-    
-    solara.FileDrop(
-        label="Drag and drop a file here",
-        on_file=on_file,
-        lazy=True,  # We will only read the first 100 bytes
-    )
-
 @solara.component
 def ListAvailableCheckpoints():
-    list_subfolders_names = [f.name for f in os.scandir("extracted_files") if f.is_dir()]
+    list_subfolders_names = [f.name for f in os.scandir("agent/checkpoints") if f.is_dir()]
     available_checkpoint_names.set(list_subfolders_names)
-
 
 def load_agent():
     if selected_checkpoint_name.value is None:
@@ -213,12 +167,18 @@ def load_agent():
     )
     algo = config_dqn.build()
     checkpoint_dir = selected_checkpoint_name.value
-    checkpoint_path = os.path.join("extracted_files", checkpoint_dir)
+    checkpoint_path = os.path.join("agent/checkpoints", checkpoint_dir)
     algo.restore(checkpoint_path)
 
-    
-
     return algo
+
+def load_test():
+    algo = load_agent()
+    if algo is None:
+        error_state.set('Couldnt load checkpoint')
+    else:
+        uploaded_algo_status.set(True)
+    uploaded_algo.set(algo)
 
 def start_test():
 
@@ -233,8 +193,6 @@ def start_test():
     num_request_array = []
     load_array = []
     response_time_array = []
-
-
 
     for i in range(number_of_steps.value):
         step_list.append(i)
@@ -259,38 +217,40 @@ def start_test():
                  })
         # time.sleep(2)
 
-def load_test():
-    algo = load_agent()
-    if algo is None:
-        error_state.set('Couldnt load checkpoint')
-    else:
-        uploaded_algo_status.set(True)
-    uploaded_algo.set(algo)
-
 
 @solara.component
+def CheckpointUpload():
+    filename, set_filename = solara.use_state("")
+
+    def on_file(f: FileInfo):
+        set_filename(f["name"])
+
+
+        extracted_folder = os.path.join("agent/checkpoints")
+        with ZipFile(f["file_obj"], "r") as zip_ref:
+            zip_ref.extractall(extracted_folder)
+
+    solara.FileDrop(label="Drang and drop checkpoint file as a zip", on_file=on_file, lazy=False)
+
+
+
+@solara.component 
 def Page():
-
-
     with solara.Sidebar():
-        if error_state.value is not None:
-            solara.Error(label=f'{error_state.value}')
-        # CheckpointDrop()
+        with solara.Card(title="Upload checkpoint or select"):
+            CheckpointUpload()
         ListAvailableCheckpoints()
-        solara.Select(label="Choose checkpoint", values=available_checkpoint_names.value, value=selected_checkpoint_name.value, 
-            on_value=selected_checkpoint_name.set
-        )
+        solara.Select(label="Choose checkpoint", values=available_checkpoint_names.value, 
+                      value=selected_checkpoint_name.value, on_value=selected_checkpoint_name.set)
         solara.Button(label="Run test", on_click=start_test, disabled=True if uploaded_algo.value is None else False)
         solara.Button(label="Load agent", on_click=load_test, disabled=True if selected_checkpoint_name.value is None else False)
         if uploaded_algo_status.value == False:
             solara.Info("Agent is not uploaded")
         else:
             solara.Info("Agent is ready for test")
-        solara.SliderInt(label="choose number of steps", min=1, max=500, value=number_of_steps)
-    
+        solara.SliderInt(label="choose number of steps", min=1, max=500, value=number_of_steps.value, on_value=number_of_steps.set)
+        
+
+
 
     status_plot(test_plot_data.value)
-    
-
-    
-

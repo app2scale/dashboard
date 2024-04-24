@@ -20,7 +20,7 @@ import math
 
 
 class Teastore(gym.Env):
-    DATA_PATH = "./all_load_mpa_cpu_and_performance_without_average.csv"
+    DATA_PATH = "agent/data/all_load_mpa_cpu_and_performance_without_average.csv"
     MAX_STEPS = 500
 
 
