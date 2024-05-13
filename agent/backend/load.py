@@ -16,6 +16,9 @@ class ConstantLoad():
         eod = False
         return self.load, eod
 
+    def get_max(self):
+        return self.load
+    
 class SinusLoad():
     '''Periodic load profile'''
 
@@ -33,6 +36,8 @@ class SinusLoad():
         eod = True if self.step % self.period == 0 else False
         return max(0, self.amplitude + self.amplitude * np.sin(2 * np.pi * (self.step % self.period) / self.period )), eod
 
+    def get_max(self):
+        return 2 * self.amplitude 
 
 class PaymentGateway113Load():
     '''Payment Gateway Load 113 Days
@@ -60,3 +65,6 @@ Incoming load to Payment Gateway.
         eod = True if i == self.n - 1 else False
         self.step += 1
         return self.loadprofile[i], eod
+    
+    def get_max(self):
+        return max(self.loadprofile)

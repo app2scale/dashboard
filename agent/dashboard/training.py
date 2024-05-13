@@ -10,7 +10,7 @@ from ..backend.loss import loss_mape
 local_state = solara.reactive(
     {
         'input_cols': solara.reactive(['replica','cpu','expected_tps']),
-        'output_cols': solara.reactive(['cpu_usage']),
+        'output_cols': solara.reactive(['cpu_usage','num_request']),
         'trn_ratio' : solara.reactive(0.8),
         'learning_rate_log10': solara.reactive(-3),
         'batch_size_trn': solara.reactive(32),
@@ -28,7 +28,9 @@ local_state = solara.reactive(
     )
 
 @solara.component
-def LossPlot(data, render_count):
+def LossPlot(data, render_count, log_y):
+    trn_loss_data = [[e, l] for e, l in zip(data['epoch'], data['trn_loss'])]
+    val_loss_data = [[e, l] for e, l in zip(data['epoch'], data['val_loss'])]
     options = {
         'tooltip': {
             'trigger': 'axis',
@@ -37,23 +39,22 @@ def LossPlot(data, render_count):
             }
         },
         "xAxis": {
-            "type": "category",
-            "data": data['epoch'],
+            "type": "value",
             "name": "epoch",
         },
         "yAxis": {
-            "type": "value",
+            "type": "log" if log_y else "value",
             "name": "loss",
         },
         "series": [ 
             {
                 "name": "training loss",
-                "data": data['trn_loss'],
+                "data": trn_loss_data,
                 "type": 'line'
             },
             {
                 "name": "validation loss",
-                "data": data['val_loss'],
+                "data": val_loss_data,
                 "type": 'line'
             },            
         ]
@@ -68,6 +69,7 @@ def force_render():
 @solara.component
 def ExecutePanel(df):
     filter, set_filter = solara.use_cross_filter(id(df))
+    loss_plot_log_y, set_loss_plot_log_y  = solara.use_state_or_update(False)
 
     dff = df
     if filter is not None:
@@ -109,7 +111,10 @@ def ExecutePanel(df):
     with solara.Card(title="Loss History",  margin=1, elevation=10,
                     subtitle="""Once you start training, you can monitor the training and validation losses in this plot.
                     """):
-        LossPlot(local_state.value['loss_plot_data'].value, local_state.value['render_count'].value)
+        solara.Checkbox(label='Log-Scale y-axis', value=loss_plot_log_y, on_value=set_loss_plot_log_y)
+        LossPlot(local_state.value['loss_plot_data'].value, 
+                 local_state.value['render_count'].value, 
+                 loss_plot_log_y)
 
 
 @solara.component

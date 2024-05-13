@@ -1,11 +1,13 @@
 import solara
 import pandas as pd
+import time
+import random
 from ..backend.reward import RewardHighCPUUsage, RewardLowCPUUsage
 from ..backend.policy import PolicyArgMax, PolicyHPA
 from ..backend.load import ConstantLoad, SinusLoad, PaymentGateway113Load
 from .training import local_state as training_state
 from .data import state as data_state
-from ..backend.utils import estimate_metrics, read_metrics
+from ..backend.utils import estimate_metrics, read_metrics, Gauge
 
 local_state = solara.reactive(
     {
@@ -23,7 +25,7 @@ policy_objects = [PolicyArgMax(), PolicyHPA(0.2), PolicyHPA(0.4), PolicyHPA(0.6)
 policy_labels = [p.label for p in policy_objects]
 selected_policy_label = solara.reactive(policy_labels[0])
 
-load_objects = [ConstantLoad(24), ConstantLoad(72), ConstantLoad(168), SinusLoad(180, 100), PaymentGateway113Load()]
+load_objects = [ConstantLoad(24), ConstantLoad(72), ConstantLoad(168), SinusLoad(125, 100), PaymentGateway113Load()]
 load_labels = [p.label for p in load_objects]
 selected_load_label = solara.reactive(load_labels[0])
 
@@ -44,7 +46,7 @@ def force_render():
 
 @solara.component
 def InferencePlots(render_count):
-
+    #print(local_state.value['render_count'].value)
     unavailable_states_in_data, set_unavailable_states_in_data = solara.use_state_or_update(0)
     total_cost, set_total_cost = solara.use_state_or_update(0)
 
@@ -92,7 +94,7 @@ def InferencePlots(render_count):
             else:
                 cur_metrics = read_metrics(df, cur_state)
                 if cur_metrics is None:
-                    print('there is no data for this state',cur_state)
+                    #print('there is no data for this state',cur_state)
                     state_not_found_in_data += 1
                     cur_metrics = estimate_metrics(model, ds, cur_state)
 
@@ -113,6 +115,7 @@ def InferencePlots(render_count):
                     cur_hist[state]['ylabel'] = state
             local_state.value['inference_plot_data'].set(cur_hist)
             force_render()
+            time.sleep(0.5)
 
             next_state = chosen_policy.choose(model, ds, input_ranges, cur_state, cur_metrics, chosen_reward_fn)
             if 'replica' in next_state.keys():
@@ -147,7 +150,16 @@ def InferencePlots(render_count):
     #print('Interence plots')
     if len(local_state.value['inference_plot_data'].value.items()) > 0:
         solara.Text(f'Total cost is ${total_cost:.4f}')
+    plot_data = local_state.value['inference_plot_data'].value
+
+
+
     with solara.ColumnsResponsive():
+        if "expected_tps" in plot_data.keys():
+            Gauge(plot_data['expected_tps']['y'][-1], 250, 'incoming load')
+            if "num_request" in plot_data.keys():
+                Gauge(plot_data['expected_tps']['y'][-1]/ plot_data['num_request']['y'][-1] , 100, 'performance')
+
         for col, content in local_state.value['inference_plot_data'].value.items():
             options = {
                 'title': {
@@ -189,6 +201,7 @@ def InferencePlots(render_count):
                 ],
             }
             solara.FigureEcharts(option=options, attributes={"style": "height: 300px; width: 300px"})
+            
 
 
 @solara.component

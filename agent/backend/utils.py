@@ -1,4 +1,5 @@
 import torch
+import random
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from functools import partial
@@ -239,3 +240,81 @@ def Plot1D(x: List, y: List, title='title',xlabel='xlabel', ylabel='ylabel', for
         ],
     }
     solara.FigureEcharts(option=options)
+
+
+@solara.component
+def Gauge(value, max_value, name):
+    value, set_value = solara.use_state_or_update(value)
+    max_value, set_max_value = solara.use_state_or_update(max_value)
+    name, set_name = solara.use_state_or_update(name)
+    option = {
+            "series": [
+                {
+                "animation": True,
+                "animationDuration": 5,
+                "type": 'gauge',
+                "startAngle": 180,
+                "endAngle": 0,
+                #"center": ['50%', '75%'],
+                #"radius": '80%',
+                "min": 0,
+                "max": max_value,
+                "axisLine": {
+                    "lineStyle": {
+                    "width": 20,
+                    "color": [
+                        [175/250, '#7CFFB2'],
+                        [225/250, '#FDDD60'],
+                        [250/250, '#fd666d'],
+                    ]
+                    }
+                },
+                "pointer": {
+                    "offsetCenter": [0, '10%'],
+                    "icon": 'path://M2090.36389,615.30999 L2090.36389,615.30999 C2091.48372,615.30999 2092.40383,616.194028 2092.44859,617.312956 L2096.90698,728.755929 C2097.05155,732.369577 2094.2393,735.416212 2090.62566,735.56078 C2090.53845,735.564269 2090.45117,735.566014 2090.36389,735.566014 L2090.36389,735.566014 C2086.74736,735.566014 2083.81557,732.63423 2083.81557,729.017692 C2083.81557,728.930412 2083.81732,728.84314 2083.82081,728.755929 L2088.2792,617.312956 C2088.32396,616.194028 2089.24407,615.30999 2090.36389,615.30999 Z',
+                    "length": '95%',
+                    "itemStyle": {
+                    "color": '#000'
+                    }
+                },
+                "axisTick": {
+                    "length": 5,
+                    "lineStyle": {
+                    "color": 'auto',
+                    "width": 2
+                    }
+                },
+                "splitLine": {
+                    "length": 10,
+                    "lineStyle": {
+                    "color": 'auto',
+                    "width": 3
+                    }
+                },
+                "axisLabel": {
+                    "show": "false",
+                    "distance": 30
+                },
+                #"title": {
+                #    "offsetCenter": [0, '-10%'],
+                #    "fontSize": 20
+                #},
+                "detail": {
+                    #"fontSize": 10,
+                    #"offsetCenter": [0, '-35%'],
+                    "valueAnimation": "true",
+                    #"color": 'inherit',
+                    #"precision": 0,
+                    "formatter": f"{value:.0f}"
+                },
+                "data": [
+                    {
+                    "value": max(0, value +  2*(2*random.random()-1)),
+                    "name":  name,
+                    }
+                ]
+                }
+            ]
+            }
+
+    solara.FigureEcharts(option=option)
