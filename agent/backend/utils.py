@@ -7,10 +7,21 @@ import pandas as pd
 from typing import Dict, Union, List
 import itertools
 import solara
+import numpy as np
 
 from .data import ExplorationDataset
 from .models import Perceptron, NetSingleHiddenLayer
 from .loss import loss_mape
+
+def read_data(file_name):
+    #df = pd.read_csv('agent/data/averaged_full_state_data.csv')
+    df = pd.read_csv(f'agent/data/{file_name}')
+    df = df.infer_objects()
+    df['step'] = df.index
+    for col in df.columns:
+        if df.dtypes[col] == np.float64:
+            df[col] = df[col].apply(lambda x: round(x, 6))
+    return df
 
 def predict_dict(model, ds, inputs: Dict[str, Union[List[int], List[float]]]):
     combinations = itertools.product(*inputs.values())

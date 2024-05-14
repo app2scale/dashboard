@@ -3,7 +3,7 @@ import torch
 import solara.express as solara_px
 from .training import local_state as training_state
 from .data import state as data_state
-from ..backend.utils import predict
+from ..backend.utils import predict, read_data
 
 
 
@@ -35,7 +35,7 @@ def ScatterPlot(predictions, render_count):
 
 @solara.component
 def Page():
-    df = data_state.value['data']
+    df = read_data(data_state.value['data_file'].value)
 
     filter, set_filter = solara.use_cross_filter(id(df))
 

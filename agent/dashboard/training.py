@@ -4,7 +4,7 @@ from typing import Optional, cast
 import solara.express as solara_px
 from .data import state
 from ..backend.data import ExplorationDataset
-from ..backend.utils import train
+from ..backend.utils import train, read_data
 from ..backend.loss import loss_mape
 
 local_state = solara.reactive(
@@ -185,7 +185,8 @@ def ParameterSelection(df, attributes):
 
 @solara.component
 def Page():
-    df = state.value['data']
+    print('reading', state.value['data_file'].value)
+    df = read_data(state.value['data_file'].value)
     attributes = list(df.columns)
     dff = df
     filtered_cols = []

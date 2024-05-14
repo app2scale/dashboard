@@ -23,7 +23,7 @@ class NetSingleHiddenLayer(nn.Module):
         self.layer2 = nn.Sequential(nn.Linear(in_features=self.hidden_size,out_features=self.out_features))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out = self.layer1(x)
+        out = torch.nn.functional.relu(self.layer1(x))
         out = self.layer2(out)
         return out
 

@@ -3,22 +3,16 @@ import pandas as pd
 from typing import Optional, cast
 import solara.express as solara_px
 import numpy as np
+from ..backend.utils import read_data
 
-def read_data():
-    #df = pd.read_csv('agent/data/averaged_full_state_data.csv')
-    df = pd.read_csv('agent/data/output_browse_300_company_data_constant_heap.csv')
-    df = df.infer_objects()
-    df['step'] = df.index
-    for col in df.columns:
-        if df.dtypes[col] == np.float64:
-            df[col] = df[col].apply(lambda x: round(x, 6))
-    return df
 
-df = read_data()
+data_files = ['all_load_mpa_cpu_and_performance_without_average_payten_with_response.csv',
+              'all_load_mpa_cpu_and_performance_without_average.csv',
+              'averaged_full_state_data.csv',
+              'output_browse_300_company_data_constant_heap.csv']
 
 state = solara.reactive(
     {
-        'data': df ,
         'x':  solara.reactive('expected_tps'),
         'y':  solara.reactive('num_request'),
         'logx': solara.reactive(False),
@@ -27,6 +21,7 @@ state = solara.reactive(
         'size': solara.reactive('replica'),
         'color': solara.reactive('cpu_usage'),
         'filter': solara.reactive(None),
+        'data_file': solara.reactive(data_files[0]),
     }
     )
 
@@ -55,7 +50,11 @@ def ExecutionPanel():
     solara.Text("Execution Panel")
 
 @solara.component
-def DataViewer(df):
+def DataViewer():
+
+    df = read_data(state.value['data_file'].value) 
+    #df = state.value['data'].value
+
     input_cols, set_input_cols = solara.use_state(['replica'])
 
     filter = state.value['filter'].value
@@ -102,6 +101,8 @@ def DataViewer(df):
         is not used in the next steps. In the training section, there will be other
         filters specific to training.
         """):
+        solara.Select(label='Select Source CSV', values=data_files, value=state.value['data_file'].value, 
+                      on_value=state.value['data_file'].set)
         solara.CrossFilterDataFrame(df, items_per_page=10)
 
     with solara.Card("Scatter Plot", margin=1, elevation=2,
@@ -128,9 +129,4 @@ def DataViewer(df):
             
 @solara.component 
 def Page():
-    #if state.value['filter'].value is None:
-    #    print('setting....')
-    #    filter, set_filter = solara.use_cross_filter(id(state.value['data']))
-    #    state.value['filter'].set(filter)
-
-    DataViewer(state.value['data'])
+    DataViewer()
