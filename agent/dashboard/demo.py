@@ -387,7 +387,7 @@ def step(action, state, env):
         updated_state = new_state[:2]
         print('applying the state...')
         print("updated state", updated_state)
-        # update_and_deploy_deployment_specs(updated_state)
+        update_and_deploy_deployment_specs(updated_state)
         print('Entering cooldown period...')
         time.sleep(WARM_UP_PERIOD)
         print('cooldown period ended...')

@@ -31,6 +31,15 @@ $$ \max_{state} reward(model(state)) $$
         #print('next state', next_state)
         return next_state
 
+class PolicyDoNothing():
+    '''Don't change anything policy.'''
+
+    def __init__(self):
+        self.label = """PolicyDoNothing"""
+
+    def choose(self, model, ds, input_ranges, cur_state, cur_metrics, reward_fn):
+        return cur_state.copy()
+    
 
 class PolicyHPA():
     '''Increase/decrease replica if cpu usage is above/below threshold

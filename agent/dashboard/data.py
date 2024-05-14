@@ -5,7 +5,8 @@ import solara.express as solara_px
 import numpy as np
 
 def read_data():
-    df = pd.read_csv('agent/data/averaged_full_state_data.csv')
+    #df = pd.read_csv('agent/data/averaged_full_state_data.csv')
+    df = pd.read_csv('agent/data/output_browse_300_company_data_constant_heap.csv')
     df = df.infer_objects()
     df['step'] = df.index
     for col in df.columns:
@@ -19,7 +20,7 @@ state = solara.reactive(
     {
         'data': df ,
         'x':  solara.reactive('expected_tps'),
-        'y':  solara.reactive('avg_num_request'),
+        'y':  solara.reactive('num_request'),
         'logx': solara.reactive(False),
         'logy': solara.reactive(False),
         'size_max': solara.reactive(10.0),
@@ -111,7 +112,6 @@ def DataViewer(df):
         """):
 
         if state.value['x'].value and state.value['y'].value:
-
             solara_px.scatter(
                 dff,
                 state.value['x'].value,

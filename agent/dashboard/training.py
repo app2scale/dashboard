@@ -9,7 +9,7 @@ from ..backend.loss import loss_mape
 
 local_state = solara.reactive(
     {
-        'input_cols': solara.reactive(['replica','cpu','expected_tps']),
+        'input_cols': solara.reactive(['replica','cpu','expected_tps','previous_tps']),
         'output_cols': solara.reactive(['cpu_usage','num_request']),
         'trn_ratio' : solara.reactive(0.8),
         'learning_rate_log10': solara.reactive(-3),
@@ -18,7 +18,7 @@ local_state = solara.reactive(
         'model_name': solara.reactive("Perceptron"),
         'optimizer_name': solara.reactive("Adam"),
         'max_epoch': solara.reactive(30),
-        'loss_name': solara.reactive('mape'),
+        'loss_name': solara.reactive('mae'),
         'loss_plot_data': solara.reactive({'epoch': [], 'trn_loss': [], 'val_loss': []}),
         'render_count': solara.reactive(0),
         'model': solara.reactive(None),
@@ -146,7 +146,7 @@ def ParameterSelection(df, attributes):
                 solara.Select(label="Optimizer", values=["Adam"],
                             value=local_state.value['optimizer_name'].value,
                             on_value=local_state.value['optimizer_name'].set)
-                solara.Select(label="Loss", values=['mape'], 
+                solara.Select(label="Loss", values=['mape','mae'], 
                             value=local_state.value['loss_name'].value,
                             on_value=local_state.value['loss_name'].set)
                 solara.SliderFloat(label="Learning rate (log10)",
@@ -197,13 +197,14 @@ def Page():
         dff = df[filtered_cols]
     with solara.Sidebar():
         ParameterSelection(dff, attributes)
-    with solara.ColumnsResponsive():
-        ExecutePanel(dff)
+    with solara.Row():
         with solara.Card(title="Training/Testing Data",  margin=1, elevation=10,
                     subtitle="""Based on the selected nput/output attributes and the cross-filters,
                     this is the final data used in training/validation. Right before using
                     this data in the training/validation, normalization is applied. For more
-                    information please check backend.data.ExplorationDataset"""):
+                    information please check backend.data.ExplorationDataset""",
+                    style='width: 500px'):
             solara.CrossFilterDataFrame(dff, items_per_page=10)
+        ExecutePanel(dff)
 
     

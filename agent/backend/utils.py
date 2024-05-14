@@ -74,6 +74,8 @@ def train(ds: ExplorationDataset, model_name, trn_ratio,
 
     if loss_name == "mape":
         loss_fn = loss_mape
+    elif loss_name == "mae":
+        loss_fn = torch.nn.L1Loss()
 
     trn_size = int(len(ds)*trn_ratio)
     val_size = len(ds) - trn_size
@@ -199,16 +201,22 @@ def update_policy(model, rewards, log_probabilities, gamma, learning_rate, optim
 
 
 @solara.component
-def Plot1D(x: List, y: List, title='title',xlabel='xlabel', ylabel='ylabel', force_render=0):
+def Plot1D(x: List, y: List[List], title='title',xlabel='xlabel', ylabel=['ylabel'], force_render=0):
     options = {
-        'title': {
-            'text': title,
-            'left': 'center'},
         'tooltip': {
             'trigger': 'axis',
             'axisPointer': {
                 'type': 'cross'
             }
+        },
+        'legend': {
+            'data': ylabel,
+            'top:': '0', 
+            'bottom:': '0', 
+            #'bottom': '0%',
+            'left': 'center', 
+            'padding': 0,
+            'borderWidth': 0,
         },
         'xAxis': {
             'axisTick': {
@@ -221,8 +229,8 @@ def Plot1D(x: List, y: List, title='title',xlabel='xlabel', ylabel='ylabel', for
         },
         'yAxis': [
             {
+                'boundaryGap': False,
                 'type': 'value',
-                'name': ylabel,
                 'position': 'left',
                 'alignTicks': True,
                 'axisLine': {
@@ -232,18 +240,19 @@ def Plot1D(x: List, y: List, title='title',xlabel='xlabel', ylabel='ylabel', for
         ],
         'series': [
             {
-            'name': ylabel,
-            'data': y,
+            'name': _ylabel,
+            'data': _y,
             'type': 'line',
-            'yAxisIndex': 1
-            },
-        ],
+            'yAxisIndex': 0,
+            } for _ylabel, _y in zip(ylabel, y)
+        ], 
     }
-    solara.FigureEcharts(option=options)
+    solara.FigureEcharts(option=options, attributes={"style": "height: 300px; width: 300px"})
+
 
 
 @solara.component
-def Gauge(value, max_value, name):
+def Gauge(value, max_value, name, style={}):
     value, set_value = solara.use_state_or_update(value)
     max_value, set_max_value = solara.use_state_or_update(max_value)
     name, set_name = solara.use_state_or_update(name)
@@ -255,8 +264,8 @@ def Gauge(value, max_value, name):
                 "type": 'gauge',
                 "startAngle": 180,
                 "endAngle": 0,
-                #"center": ['50%', '75%'],
-                #"radius": '80%',
+                "center": ['50%', '50%'],
+                "radius": '100%',
                 "min": 0,
                 "max": max_value,
                 "axisLine": {
@@ -317,4 +326,5 @@ def Gauge(value, max_value, name):
             ]
             }
 
-    solara.FigureEcharts(option=option)
+    #with solara.Card(title="deneme", style="width: 300px"):
+    solara.FigureEcharts(option=option, attributes={"style": "height: 300px; width: 300px"})

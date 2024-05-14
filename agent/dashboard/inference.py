@@ -3,11 +3,11 @@ import pandas as pd
 import time
 import random
 from ..backend.reward import RewardHighCPUUsage, RewardLowCPUUsage
-from ..backend.policy import PolicyArgMax, PolicyHPA
+from ..backend.policy import PolicyArgMax, PolicyHPA, PolicyDoNothing
 from ..backend.load import ConstantLoad, SinusLoad, PaymentGateway113Load
 from .training import local_state as training_state
 from .data import state as data_state
-from ..backend.utils import estimate_metrics, read_metrics, Gauge
+from ..backend.utils import estimate_metrics, read_metrics, Gauge, Plot1D
 
 local_state = solara.reactive(
     {
@@ -21,11 +21,11 @@ reward_objects = [RewardHighCPUUsage(), RewardLowCPUUsage()]
 reward_labels = [r.label for r in reward_objects]
 selected_reward_label = solara.reactive(reward_labels[0])
 
-policy_objects = [PolicyArgMax(), PolicyHPA(0.2), PolicyHPA(0.4), PolicyHPA(0.6), PolicyHPA(0.8)]
+policy_objects = [PolicyDoNothing(), PolicyArgMax(), PolicyHPA(0.2), PolicyHPA(0.4), PolicyHPA(0.6), PolicyHPA(0.8)]
 policy_labels = [p.label for p in policy_objects]
 selected_policy_label = solara.reactive(policy_labels[0])
 
-load_objects = [ConstantLoad(24), ConstantLoad(72), ConstantLoad(168), SinusLoad(125, 100), PaymentGateway113Load()]
+load_objects = [PaymentGateway113Load(), ConstantLoad(24), ConstantLoad(72), ConstantLoad(168), SinusLoad(125, 100)]
 load_labels = [p.label for p in load_objects]
 selected_load_label = solara.reactive(load_labels[0])
 
@@ -33,6 +33,8 @@ nsteps = solara.reactive(10)
 initial_replica = solara.reactive(1)
 initial_cpu = solara.reactive(4)
 cpu_cost_per_hour = solara.reactive(0.031611)
+
+animation_speed = solara.reactive(0.5)
 
 use_model_to_estimate_metrics = solara.reactive(False)
 
@@ -49,6 +51,7 @@ def InferencePlots(render_count):
     #print(local_state.value['render_count'].value)
     unavailable_states_in_data, set_unavailable_states_in_data = solara.use_state_or_update(0)
     total_cost, set_total_cost = solara.use_state_or_update(0)
+    avg_tps_performance, set_avg_tps_performance = solara.use_state_or_update(0)
 
     def execute():
         #print(selected_policy_label, selected_reward_label, selected_load_label)
@@ -78,14 +81,17 @@ def InferencePlots(render_count):
         cpu = initial_cpu.value
         state_not_found_in_data = 0
         cum_cost = 0.0
+        _avg_tps_performance = 0
         for load, eod in load_profile:
+            if step == 0:
+                prev_load = load
             if step > nsteps.value:
                 break
             # the model uses load as an input, supply with it
             if 'expected_tps' in input_ranges.keys():
                 input_ranges['expected_tps'] = [load]
 
-            cur_state = {"replica": replica, "cpu": cpu, "expected_tps": load}
+            cur_state = {"replica": replica, "cpu": cpu, "expected_tps": load, "previous_tps": prev_load}
             cum_cost += cpu_cost_per_hour.value * 24 * replica * cpu / 10
             set_total_cost(cum_cost)
             if use_model_to_estimate_metrics.value:
@@ -114,8 +120,14 @@ def InferencePlots(render_count):
                     cur_hist[state]['xlabel'] = 'step'
                     cur_hist[state]['ylabel'] = state
             local_state.value['inference_plot_data'].set(cur_hist)
+
+            # update tps performance
+            if set(["expected_tps","num_request"]).issubset(set(combined_data.keys())):
+                cur_tps_performance  = min(100, 100*combined_data['num_request']/combined_data["expected_tps"])
+                _avg_tps_performance = ((1/(step+1)) * (step * _avg_tps_performance + cur_tps_performance))
+                set_avg_tps_performance(_avg_tps_performance)
             force_render()
-            time.sleep(0.5)
+            time.sleep(animation_speed.value)
 
             next_state = chosen_policy.choose(model, ds, input_ranges, cur_state, cur_metrics, chosen_reward_fn)
             if 'replica' in next_state.keys():
@@ -125,19 +137,11 @@ def InferencePlots(render_count):
             
             step += 1
             set_unavailable_states_in_data(state_not_found_in_data)
+            prev_load = load
 
 
-    with solara.GridFixed(columns=3):
-        solara.InputInt(label='Number of steps', value=nsteps.value, on_value=nsteps.set)
-        solara.InputInt(label="Initial replica", value=initial_replica)
-        solara.InputInt(label="Initial CPU", value=initial_cpu)
-        solara.InputFloat(label="CPU cost per hour ($)", value=cpu_cost_per_hour)
-        if set(training_state.value['input_cols'].value) == set(['replica','cpu','expected_tps']):
-            solara.Checkbox(label='Use twin model to estimate metrics', value=use_model_to_estimate_metrics)
-        else:
-            with solara.Column():
-                solara.Checkbox(label='Use twin model to estimate metrics', value=use_model_to_estimate_metrics, disabled=True)
-                solara.Info('twin model is not suitable for metric estimation')
+#    with solara.GridFixed(columns=3):
+
 
     model = training_state.value['model'].value
     if model is None:
@@ -149,81 +153,48 @@ def InferencePlots(render_count):
 
     #print('Interence plots')
     if len(local_state.value['inference_plot_data'].value.items()) > 0:
-        solara.Text(f'Total cost is ${total_cost:.4f}')
+        with solara.Row():
+            solara.Text(f'Total cost is ${total_cost:.4f}')
+            solara.Text(f'Avg. TPS Performance (%) is {avg_tps_performance:.4f}')
+        
     plot_data = local_state.value['inference_plot_data'].value
 
 
 
-    with solara.ColumnsResponsive():
+
+    with solara.ColumnsResponsive(4, style="overflow: hidden;"):
         if "expected_tps" in plot_data.keys():
             Gauge(plot_data['expected_tps']['y'][-1], 250, 'incoming load')
             if "num_request" in plot_data.keys():
-                Gauge(plot_data['expected_tps']['y'][-1]/ plot_data['num_request']['y'][-1] , 100, 'performance')
+                performance = min(100, 100*plot_data['num_request']['y'][-1]/ plot_data['expected_tps']['y'][-1])
+                Gauge(performance, 100, 'performance', style={"style": "width: 300px;"})
 
         for col, content in local_state.value['inference_plot_data'].value.items():
-            options = {
-                'title': {
-                    'text': content['title'],
-                    'left': 'center'},
-                'tooltip': {
-                    'trigger': 'axis',
-                    'axisPointer': {
-                        'type': 'cross'
-                    }
-                },
-                'xAxis': {
-                    'axisTick': {
-                        'alignWithLabel': True
-                    },
-                    'data': content['x'],
-                    'name': content['xlabel'],
-                    'nameLocation': 'middle',
-                    'nameTextStyle': {'verticalAlign': 'top','padding': [10, 0, 0, 0]}
-                },
-                'yAxis': [
-                    {
-                        'type': 'value',
-                        'name': content['ylabel'],
-                        'position': 'left',
-                        'alignTicks': True,
-                        'axisLine': {
-                            'show': True,
-                            'lineStyle': {'color': 'green'}}
-                    },
-                ],
-                'series': [
-                    {
-                    'name': content['ylabel'],
-                    'data': content['y'],
-                    'type': 'line',
-                    'yAxisIndex': 0
-                    },
-                ],
-            }
-            solara.FigureEcharts(option=options, attributes={"style": "height: 300px; width: 300px"})
-            
+            if col == 'expected_tps' or col == 'num_request':
+                continue
+            if col == 'cpu_usage' or col == 'cpu':
+                continue
+            Plot1D(content['x'], [content['y']], content['title'], content['xlabel'],[content['ylabel']])
+          
+        # Let's plot num_request and expected_tps on the same plot
+        if set(['num_request','expected_tps']).issubset(set(plot_data.keys())):
+            x = plot_data['num_request']['x']
+            xlabel = plot_data['num_request']['xlabel']
+            y = [plot_data['expected_tps']['y'], plot_data['num_request']['y']]
+            ylabel = ['expected tps', 'num request']
+            title = 'num_request & expected_tps'
+            Plot1D(x, y, title, xlabel, ylabel)
+
+        # Let's plot cpu limit and cpu_usage on the same plot
+        if set(['cpu_usage','cpu']).issubset(set(plot_data.keys())):
+            x = plot_data['cpu']['x']
+            xlabel = plot_data['cpu']['xlabel']
+            y = [[_/10 for _ in plot_data['cpu']['y']], plot_data['cpu_usage']['y']]
+            ylabel = ['cpu limit', 'cpu usage']
+            title = 'cpu limit and cpu usaage'
+            Plot1D(x, y, title, xlabel, ylabel)
 
 
-@solara.component
-def Plot1D(x,y):
-    options = {
-        "xAxis": {
-            "type": "category",
-            "data": x,
-        },
-        "yAxis": {
-            "type": "value",
-        },
-        "series": [
-            {
-                "data": y,
-                "type": 'line'
-            },
-        ]
-    }
-
-    with solara.Column():
-        solara.FigureEcharts(option=options)
 
 @solara.component
 def LoadProfilePlot(load_profile):
@@ -236,7 +207,7 @@ def LoadProfilePlot(load_profile):
         y.append(load)
         step += 1
 
-    Plot1D(x,y)
+    Plot1D(x,[y])
 
 
 @solara.component
@@ -268,4 +239,17 @@ def Page():
                     chosen_load = load_objects[chosen_load_index]
                     solara.Markdown(md_text=chosen_load.__doc__)
                     LoadProfilePlot(chosen_load)
+            with solara.lab.Tab("EXECUTE"):
+                solara.InputInt(label='Number of steps', value=nsteps.value, on_value=nsteps.set)
+                solara.InputInt(label="Initial replica", value=initial_replica)
+                solara.InputInt(label="Initial CPU", value=initial_cpu)
+                solara.InputFloat(label="CPU cost per hour ($)", value=cpu_cost_per_hour)
+                solara.SliderFloat(label="Seconds per step (animation speed)", value=animation_speed, min=0, max=1, step=0.1)
+                if set(training_state.value['input_cols'].value) == set(['replica','cpu','expected_tps','previous_tps']):
+                    solara.Checkbox(label='Use twin model to estimate metrics', value=use_model_to_estimate_metrics)
+                else:
+                    with solara.Column():
+                        solara.Checkbox(label='Use twin model to estimate metrics', value=use_model_to_estimate_metrics, disabled=True)
+                        solara.Info('twin model is not suitable for metric estimation')
+
     InferencePlots(local_state.value['render_count'].value)
