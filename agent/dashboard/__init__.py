@@ -1,6 +1,6 @@
 import solara
 
-route_order = ["/","data","training","testing","inference", "agent"]
+route_order = ["/","data","training","testing","inference", "agent", "demo"]
 
 @solara.component
 def Page():
