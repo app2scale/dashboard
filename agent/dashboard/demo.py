@@ -440,7 +440,7 @@ def start_demo():
     _, prev_state = get_deployment_info()
     obs = prev_state.copy()
     obs = np.append(obs, np.array([0.3, 1, 1, 40]))
-    for i in range(10):
+    for i in range(2000000):
 
         action = algo.compute_single_action(obs, explore=False)
         next_state, reward, metrics = step(action, obs, env)
